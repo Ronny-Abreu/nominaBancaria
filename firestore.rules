@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Almost every write below is `allow write: if false` on purpose: privileged
+// mutations happen server-side through the Firebase Admin SDK (which bypasses
+// these rules entirely) inside role-checked Next.js API routes. These rules
+// exist to gate direct CLIENT-SIDE reads (used by onSnapshot for the live
+// employee table and payroll status UI) plus one narrow self-service update.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function callerDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function callerRol() {
+      return isSignedIn() ? callerDoc().data.rol : null;
+    }
+
+    function isAdmin() {
+      return callerRol() == 'admin';
+    }
+
+    function isRrhhOrAdmin() {
+      return callerRol() == 'rrhh' || callerRol() == 'admin';
+    }
+
+    match /usuarios/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isRrhhOrAdmin());
+
+      // Self-service: an authenticated user may only flip mustChangePassword
+      // (and bump updatedAt) on their own doc after completing the forced
+      // first-login password change. Everything else is Admin-SDK-only.
+      allow update: if isSignedIn() && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['mustChangePassword', 'updatedAt']);
+
+      allow create, delete: if false;
+    }
+
+    match /nominaRuns/{runId} {
+      allow read: if isRrhhOrAdmin();
+      allow write: if false;
+
+      match /items/{itemId} {
+        allow read: if isRrhhOrAdmin();
+        allow write: if false;
+      }
+    }
+  }
+}
