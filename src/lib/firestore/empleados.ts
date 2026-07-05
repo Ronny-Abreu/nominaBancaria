@@ -4,8 +4,7 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type { Usuario } from "@/types/user";
 import type { EmpleadoCreateInput, EmpleadoUpdateInput } from "@/lib/validation/empleadoSchema";
 
-const TEMP_PASSWORD_CHARS =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$";
+const TEMP_PASSWORD_CHARS = process.env.TEMP_PASSWORD_CHARS as string;
 
 export function generateTempPassword(length = 12): string {
   let password = "";
