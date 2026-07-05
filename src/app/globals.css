@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --color-ink: #13231d;
+  --color-ink-muted: #4b5a54;
+  --color-paper: #faf9f4;
+  --color-paper-2: #f1efe6;
+  --color-ledger: #1f6f54;
+  --color-ledger-dark: #143f31;
+  --color-brass: #b08a3e;
+  --color-rust: #a6402b;
+  --color-rule: #dad4c2;
+}
+
+@theme inline {
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-paper: var(--color-paper);
+  --color-paper-2: var(--color-paper-2);
+  --color-ledger: var(--color-ledger);
+  --color-ledger-dark: var(--color-ledger-dark);
+  --color-brass: var(--color-brass);
+  --color-rust: var(--color-rust);
+  --color-rule: var(--color-rule);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: var(--color-ledger);
+  color: var(--color-paper);
+}
+
+.tabular-money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.ledger-perforation {
+  background-image: radial-gradient(
+    circle,
+    var(--color-paper) 3.5px,
+    transparent 3.6px
+  );
+  background-size: 14px 14px;
+  background-position: -3px top;
+  background-repeat: repeat-x;
+  height: 8px;
+}
+
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.6) rotate(-10deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94) rotate(-6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-8deg);
+  }
+}
+
+.stamp {
+  animation: stamp-in 360ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
