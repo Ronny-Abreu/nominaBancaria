@@ -10,6 +10,7 @@ import {
   incrementRunCounters,
   markRunProcesando,
   finalizeRun,
+  marcarPagoRealizado,
 } from "@/lib/firestore/nominaRuns";
 import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
 import { getClientIp } from "@/lib/http/clientIp";
@@ -100,6 +101,8 @@ async function processOneEmployeePayroll(
       pdfGeneradoAt: now,
       emailEnviadoAt: now,
     });
+    // Marca de idempotencia: este empleado ya quedó pagado para el período.
+    await marcarPagoRealizado(periodo, item.empleadoUid, runId);
     await incrementRunCounters(runId, { totalProcesados: 1, totalExitosos: 1 });
   } catch (err) {
     await markItemEstado(runId, item.empleadoUid, "error", {

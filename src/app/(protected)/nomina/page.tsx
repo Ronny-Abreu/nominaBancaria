@@ -22,6 +22,8 @@ export default function NominaPage() {
   const [periodo, setPeriodo] = useState(currentPeriodo());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [omitidos, setOmitidos] = useState<{ uid: string; nombre: string }[]>([]);
+  const [runIdListo, setRunIdListo] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(
@@ -50,6 +52,8 @@ export default function NominaPage() {
 
   async function handleProcesar() {
     setError(null);
+    setOmitidos([]);
+    setRunIdListo(null);
     if (selected.size === 0) {
       setError("Selecciona al menos un empleado.");
       return;
@@ -64,11 +68,23 @@ export default function NominaPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(typeof data.error === "string" ? data.error : "No se pudo iniciar el proceso.");
+        if (Array.isArray(data.omitidos)) setOmitidos(data.omitidos);
         setSubmitting(false);
         return;
       }
-      fetch(`/api/nomina/${data.runId}/process`, { method: "POST" }).catch(() => { });
-      router.push(`/nomina/${data.runId}`);
+
+      // Arranca el procesamiento (fire-and-forget) en ambos casos.
+      fetch(`/api/nomina/${data.runId}/process`, { method: "POST" }).catch(() => {});
+
+      // Si se omitieron empleados por pago duplicado, mostramos el aviso y
+      // dejamos que el usuario navegue al detalle; si no, redirigimos directo.
+      if (Array.isArray(data.omitidos) && data.omitidos.length > 0) {
+        setOmitidos(data.omitidos);
+        setRunIdListo(data.runId);
+        setSubmitting(false);
+      } else {
+        router.push(`/nomina/${data.runId}`);
+      }
     } catch {
       setError("No se pudo iniciar el proceso.");
       setSubmitting(false);
@@ -115,6 +131,28 @@ export default function NominaPage() {
           <p role="alert" className="text-sm text-rust">
             {error}
           </p>
+        )}
+
+        {omitidos.length > 0 && (
+          <div className="border border-brass/40 bg-brass/10 px-4 py-3 text-sm text-ink">
+            <p className="font-medium text-brass">
+              {omitidos.length} empleado(s) omitido(s): ya tienen un pago registrado
+              para {periodo}.
+            </p>
+            <ul className="mt-2 list-disc pl-5 text-ink-muted">
+              {omitidos.map((o) => (
+                <li key={o.uid}>{o.nombre}</li>
+              ))}
+            </ul>
+            {runIdListo && (
+              <button
+                onClick={() => router.push(`/nomina/${runIdListo}`)}
+                className="mt-3 text-sm font-medium text-ledger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+              >
+                Ver estado del proceso →
+              </button>
+            )}
+          </div>
         )}
 
         <Button

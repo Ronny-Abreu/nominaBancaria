@@ -106,3 +106,44 @@ export async function finalizeRun(runId: string): Promise<void> {
 export async function markRunProcesando(runId: string): Promise<void> {
   await runRef(runId).update({ status: "procesando" });
 }
+
+// --- Idempotencia de pagos (AB-150) ------------------------------------------
+// Cada pago exitoso deja un marcador `pagosRealizados/{periodo}__{uid}`. Antes
+// de crear una corrida se filtran los empleados que ya tienen marcador para ese
+// período, evitando pagarle dos veces a la misma persona en el mismo mes.
+
+function pagoMarkerRef(periodo: string, uid: string) {
+  return adminDb.collection("pagosRealizados").doc(`${periodo}__${uid}`);
+}
+
+export async function marcarPagoRealizado(
+  periodo: string,
+  uid: string,
+  runId: string
+): Promise<void> {
+  await pagoMarkerRef(periodo, uid).set({
+    periodo,
+    empleadoUid: uid,
+    runId,
+    pagadoAt: Date.now(),
+  });
+}
+
+/** Separa los uids en los que aún no tienen pago para el período y los que sí. */
+export async function filtrarEmpleadosNoPagados(
+  periodo: string,
+  uids: string[]
+): Promise<{ pagables: string[]; omitidos: string[] }> {
+  if (uids.length === 0) return { pagables: [], omitidos: [] };
+
+  const refs = uids.map((uid) => pagoMarkerRef(periodo, uid));
+  const snaps = await adminDb.getAll(...refs);
+
+  const pagables: string[] = [];
+  const omitidos: string[] = [];
+  snaps.forEach((snap, i) => {
+    if (snap.exists) omitidos.push(uids[i]);
+    else pagables.push(uids[i]);
+  });
+  return { pagables, omitidos };
+}
