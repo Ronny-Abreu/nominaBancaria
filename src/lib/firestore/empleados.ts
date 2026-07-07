@@ -1,6 +1,7 @@
 import "server-only";
 import { randomInt } from "crypto";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { generateCodigoEmpleado } from "@/lib/firestore/counters";
 import type { Usuario } from "@/types/user";
 import type { EmpleadoCreateInput, EmpleadoUpdateInput } from "@/lib/validation/empleadoSchema";
 
@@ -58,6 +59,9 @@ export async function createEmpleado(
     displayName: `${input.nombre} ${input.apellido}`,
   });
 
+  // Código único autogenerado para cualquier rol (admin/rrhh/empleado).
+  const codigoEmpleado = await generateCodigoEmpleado();
+
   const now = Date.now();
   const usuario: Usuario = {
     uid: authUser.uid,
@@ -69,6 +73,10 @@ export async function createEmpleado(
     cedula: input.cedula,
     puesto: input.puesto,
     salarioBruto: rol === "empleado" ? input.salarioBruto : 0,
+    cuentaBancaria: input.cuentaBancaria ?? "",
+    banco: input.banco ?? "",
+    modalidadPago: input.modalidadPago ?? "",
+    codigoEmpleado,
     activo: true,
     createdAt: now,
     updatedAt: now,
@@ -119,16 +127,32 @@ export async function updateEmpleado(
   return snap.data() as Usuario;
 }
 
-/**
- * Hard-deletes a user everywhere: the Firebase Auth account and the Firestore
- * usuarios/{uid} document. This is a permanent, admin-only operation, distinct
- * from the "baja lógica" (activo:false) soft-delete used by RRHH. The Auth
- * deletion is best-effort — if the auth user is already gone we still remove
- * the Firestore doc so no orphaned profile remains.
- */
 export async function deleteUsuario(uid: string): Promise<void> {
   await adminAuth.deleteUser(uid).catch((err: { code?: string }) => {
     if (err?.code !== "auth/user-not-found") throw err;
   });
   await adminDb.collection("usuarios").doc(uid).delete();
+}
+
+/**
+ * Genera una nueva contraseña temporal para el usuario, la aplica en Firebase
+ * Auth, revoca sus sesiones activas y marca `mustChangePassword: true`, de modo
+ * que al iniciar sesión con la temporal sea redirigido a definir una nueva.
+ * Devuelve la contraseña temporal para mostrarla una sola vez a quien la asigna.
+ */
+export async function resetEmpleadoPassword(
+  uid: string
+): Promise<{ tempPassword: string; usuario: Usuario }> {
+  const tempPassword = generateTempPassword();
+
+  await adminAuth.updateUser(uid, { password: tempPassword });
+  // Invalida cualquier sesión activa: la cookie de sesión se verifica con
+  // checkRevoked=true, así que el usuario quedará obligado a volver a entrar.
+  await adminAuth.revokeRefreshTokens(uid);
+
+  const ref = adminDb.collection("usuarios").doc(uid);
+  await ref.update({ mustChangePassword: true, updatedAt: Date.now() });
+  const snap = await ref.get();
+
+  return { tempPassword, usuario: snap.data() as Usuario };
 }

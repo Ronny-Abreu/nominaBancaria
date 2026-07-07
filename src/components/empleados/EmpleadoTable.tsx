@@ -27,6 +27,7 @@ export function EmpleadoTable() {
   const [empleados, setEmpleados] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ActivoFilter>("true");
+  const [search, setSearch] = useState("");
   const [togglingUid, setTogglingUid] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Usuario | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -40,9 +41,15 @@ export function EmpleadoTable() {
     });
   }, []);
 
+  const term = search.trim().toLowerCase();
   const filtered = empleados.filter((e) => {
-    if (filter === "all") return true;
-    return e.activo === (filter === "true");
+    if (filter !== "all" && e.activo !== (filter === "true")) return false;
+    if (!term) return true;
+    return (
+      `${e.nombre} ${e.apellido}`.toLowerCase().includes(term) ||
+      e.email.toLowerCase().includes(term) ||
+      (e.codigoEmpleado ?? "").toLowerCase().includes(term)
+    );
   });
 
   async function toggleActivo(empleado: Usuario) {
@@ -80,18 +87,27 @@ export function EmpleadoTable() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        {(["true", "false", "all"] as ActivoFilter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass ${
-              filter === f ? "bg-ink text-paper" : "bg-paper-2 text-ink-muted hover:text-ink"
-            }`}
-          >
-            {f === "true" ? "Activos" : f === "false" ? "Inactivos" : "Todos"}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          {(["true", "false", "all"] as ActivoFilter[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass ${
+                filter === f ? "bg-ink text-paper" : "bg-paper-2 text-ink-muted hover:text-ink"
+              }`}
+            >
+              {f === "true" ? "Activos" : f === "false" ? "Inactivos" : "Todos"}
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre, correo o código…"
+          className="min-w-64 flex-1 border border-rule bg-paper px-3 py-1.5 text-sm text-ink placeholder:text-ink-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+        />
       </div>
 
       {loading ? (
@@ -104,10 +120,12 @@ export function EmpleadoTable() {
         <Table>
           <THead>
             <TR>
+              <TH>Código</TH>
               <TH>Nombre</TH>
               <TH>Correo</TH>
               <TH>Puesto</TH>
               <TH>Salario bruto</TH>
+              <TH>Cuenta bancaria</TH>
               <TH>Estado</TH>
               <TH>Acciones</TH>
             </TR>
@@ -115,10 +133,12 @@ export function EmpleadoTable() {
           <TBody>
             {filtered.map((empleado) => (
               <TR key={empleado.uid}>
+                <TD>{empleado.codigoEmpleado || "—"}</TD>
                 <TD>{empleado.nombre} {empleado.apellido}</TD>
                 <TD>{empleado.email}</TD>
                 <TD>{empleado.puesto}</TD>
                 <TD className="tabular-money">{currency.format(empleado.salarioBruto)}</TD>
+                <TD>{empleado.cuentaBancaria || "—"}</TD>
                 <TD>
                   <Badge tone={empleado.activo ? "success" : "neutral"}>
                     {empleado.activo ? "Activo" : "Inactivo"}

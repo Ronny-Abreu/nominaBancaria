@@ -69,6 +69,7 @@ export default function UsuariosPage() {
           <Table>
             <THead>
               <TR>
+                <TH>Código</TH>
                 <TH>Nombre</TH>
                 <TH>Correo</TH>
                 <TH>Rol</TH>
@@ -78,6 +79,7 @@ export default function UsuariosPage() {
             <TBody>
               {usuarios.map((u) => (
                 <TR key={u.uid}>
+                  <TD>{u.codigoEmpleado || "—"}</TD>
                   <TD>{u.nombre} {u.apellido}</TD>
                   <TD>{u.email}</TD>
                   <TD>
