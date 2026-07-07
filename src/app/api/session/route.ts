@@ -54,7 +54,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const uid = await getSessionUid();
+  // getSessionUid puede lanzar SessionRevokedError si el token fue revocado;
+  // en ese caso simplemente no tenemos uid para auditoría y seguimos limpiando.
+  let uid: string | null = null;
+  try {
+    uid = await getSessionUid();
+  } catch {
+    // sesión ya revocada — continuar con la limpieza de la cookie
+  }
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE_NAME, "", { path: "/", maxAge: 0 });
 

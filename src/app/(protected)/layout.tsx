@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import {
   requireSession,
   UnauthorizedError,
+  SessionRevokedError,
   ProfileNotFoundError,
   ForbiddenError,
 } from "@/lib/auth/session";
@@ -20,6 +21,12 @@ export default async function ProtectedLayout({
   try {
     session = await requireSession();
   } catch (err) {
+    if (err instanceof SessionRevokedError) {
+      // El layout (Server Component) no puede modificar cookies; redirigimos
+      // a un route handler que las limpia y luego envía a /login.
+      redirect("/api/session/revoked");
+    }
+
     if (err instanceof UnauthorizedError) redirect("/login");
 
     if (err instanceof ProfileNotFoundError) {

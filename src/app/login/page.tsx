@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { Input } from "@/components/ui/Input";
@@ -9,7 +10,24 @@ import { Button } from "@/components/ui/Button";
 const RESET_GENERIC_MSG =
   "Si el correo está registrado, enviamos instrucciones para restablecer la contraseña.";
 
+const MOTIVO_MSG: Record<string, string> = {
+  "cuenta-desactivada": "Tu cuenta fue desactivada. Contacta a un administrador.",
+  "cuenta-eliminada": "Tu cuenta fue eliminada. Contacta a un administrador.",
+  "sesion-revocada":
+    "Tu cuenta presentó una actividad inusual, comunícate con el administrador para que te suministre la nueva contraseña.",
+};
+
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
+  const searchParams = useSearchParams();
+  const motivoMsg = MOTIVO_MSG[searchParams.get("motivo") ?? ""] ?? null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +101,11 @@ export default function LoginPage() {
           <div className="mb-8 lg:hidden">
             <h1 className="font-display text-3xl font-semibold text-ink">Nómina Bancaria</h1>
           </div>
+          {motivoMsg && (
+            <p role="alert" className="mb-4 border border-rust/40 bg-rust/10 px-3 py-2 text-sm text-rust">
+              {motivoMsg}
+            </p>
+          )}
           <h2 className="font-display text-2xl font-semibold text-ink">
             {resetMode ? "Restablecer contraseña" : "Iniciar sesión"}
           </h2>

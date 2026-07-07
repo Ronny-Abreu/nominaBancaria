@@ -8,9 +8,23 @@ export { SESSION_COOKIE_NAME };
 const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 
 export class UnauthorizedError extends Error {
-  constructor() {
-    super("No autenticado");
+  constructor(message = "No autenticado") {
+    super(message);
     this.name = "UnauthorizedError";
+  }
+}
+
+/**
+ * La cookie de sesión existe pero fue revocada (p. ej. un admin reseteó la
+ * contraseña y se llamó a revokeRefreshTokens). Es subclase de
+ * UnauthorizedError para que todas las rutas API la traten como 401 sin
+ * cambios, mientras el layout puede detectarla específicamente y mostrar el
+ * aviso de "actividad inusual".
+ */
+export class SessionRevokedError extends UnauthorizedError {
+  constructor() {
+    super("Sesión revocada");
+    this.name = "SessionRevokedError";
   }
 }
 
@@ -39,7 +53,14 @@ export async function getSessionUid(): Promise<string | null> {
   try {
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
     return decoded.uid;
-  } catch {
+  } catch (err: unknown) {
+    // Firebase lanza este código cuando el token fue revocado (p. ej. reset de
+    // contraseña con revokeRefreshTokens). Lo propagamos para que el layout
+    // pueda limpiar la cookie y mostrar el aviso, rompiendo el redirect loop.
+    const code = (err as { code?: string })?.code;
+    if (code === "auth/session-cookie-revoked") {
+      throw new SessionRevokedError();
+    }
     return null;
   }
 }
@@ -53,9 +74,10 @@ export interface SessionUser {
  * Verifies the session cookie and loads the caller's Firestore profile.
  * Throws UnauthorizedError if there's no valid session, or if the account
  * has been deactivated in the meantime.
+ * Throws SessionRevokedError if the token was revoked (password reset).
  */
 export async function requireSession(): Promise<SessionUser> {
-  const uid = await getSessionUid();
+  const uid = await getSessionUid(); // puede lanzar SessionRevokedError
   if (!uid) throw new UnauthorizedError();
 
   const snap = await adminDb.collection("usuarios").doc(uid).get();
