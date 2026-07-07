@@ -50,5 +50,27 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
+    // Registro inmutable de auditoría (AB-100): lectura solo admin; ninguna
+    // escritura/edición/eliminación desde el cliente. Los inserts ocurren solo
+    // vía Admin SDK en rutas API, y el código nunca hace update/delete aquí.
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Parámetros fiscales (AB-79/AB-138): cualquier usuario autenticado puede
+    // leerlos (los usa el motor de cálculo); solo Admin SDK escribe.
+    match /configuracion/{doc} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Marcadores de idempotencia de pago (AB-150): lectura rrhh/admin; solo
+    // Admin SDK los crea al confirmarse un pago exitoso.
+    match /pagosRealizados/{id} {
+      allow read: if isRrhhOrAdmin();
+      allow write: if false;
+    }
   }
 }

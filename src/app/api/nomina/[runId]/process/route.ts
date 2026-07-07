@@ -11,6 +11,8 @@ import {
   markRunProcesando,
   finalizeRun,
 } from "@/lib/firestore/nominaRuns";
+import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
+import { getClientIp } from "@/lib/http/clientIp";
 import type { NominaItem } from "@/types/nomina";
 
 export const maxDuration = 60;
@@ -19,11 +21,12 @@ interface RouteParams {
   params: Promise<{ runId: string }>;
 }
 
-export async function POST(_req: Request, { params }: RouteParams) {
+export async function POST(req: Request, { params }: RouteParams) {
   const { runId } = await params;
 
+  let session;
   try {
-    await requireRole(["admin", "rrhh"]);
+    session = await requireRole(["admin", "rrhh"]);
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -54,6 +57,16 @@ export async function POST(_req: Request, { params }: RouteParams) {
   );
 
   await finalizeRun(runId);
+
+  const finalized = await getNominaRun(runId);
+  await logAudit({
+    accion: "nomina.finalizar",
+    ...actorFromSession(session),
+    ip: getClientIp(req),
+    entidad: "nominaRun",
+    entidadId: runId,
+    detalle: `Nómina ${run.periodo} finalizada: ${finalized?.totalExitosos ?? 0} exitoso(s), ${finalized?.totalFallidos ?? 0} fallido(s)`,
+  });
 
   return NextResponse.json({ ok: true, processed: pending.length });
 }

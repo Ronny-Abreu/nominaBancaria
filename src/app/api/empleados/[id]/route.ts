@@ -3,6 +3,8 @@ import { requireSession, requireRole, UnauthorizedError, ForbiddenError } from "
 import { isRrhhOrAdmin } from "@/lib/auth/roles";
 import { empleadoUpdateSchema } from "@/lib/validation/empleadoSchema";
 import { getUsuarioById, updateEmpleado, deleteUsuario } from "@/lib/firestore/empleados";
+import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
+import { getClientIp } from "@/lib/http/clientIp";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,8 +35,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
+  let session;
   try {
-    await requireRole(["admin", "rrhh"]);
+    session = await requireRole(["admin", "rrhh"]);
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -57,12 +60,25 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   }
 
   const empleado = await updateEmpleado(id, parsed.data);
+
+  // A toggle of `activo` is a baja/reactivación; anything else is an edit.
+  const esBaja = parsed.data.activo === false;
+  await logAudit({
+    accion: esBaja ? "empleado.baja" : "empleado.actualizar",
+    ...actorFromSession(session),
+    ip: getClientIp(req),
+    entidad: "empleado",
+    entidadId: id,
+    detalle: esBaja
+      ? `Baja lógica de ${existing.nombre} ${existing.apellido}`
+      : `Actualización de ${existing.nombre} ${existing.apellido}`,
+  });
   return NextResponse.json({ empleado });
 }
 
 // Hard delete — admin only. Removes the Firebase Auth account and the Firestore
 // document permanently. RRHH keeps only the soft-delete (PUT activo:false).
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
   let session;
@@ -91,5 +107,13 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   }
 
   await deleteUsuario(id);
+  await logAudit({
+    accion: "empleado.eliminar",
+    ...actorFromSession(session),
+    ip: getClientIp(req),
+    entidad: "empleado",
+    entidadId: id,
+    detalle: `Eliminación permanente de ${existing.nombre} ${existing.apellido} (${existing.email})`,
+  });
   return NextResponse.json({ ok: true });
 }

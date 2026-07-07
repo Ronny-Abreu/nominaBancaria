@@ -6,7 +6,10 @@ import {
   createEmpleado,
   listEmpleados,
   EmailAlreadyExistsError,
+  CedulaAlreadyExistsError,
 } from "@/lib/firestore/empleados";
+import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
+import { getClientIp } from "@/lib/http/clientIp";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,9 +54,17 @@ export async function POST(req: NextRequest) {
       parsed.data,
       session.uid
     );
+    await logAudit({
+      accion: "empleado.crear",
+      ...actorFromSession(session),
+      ip: getClientIp(req),
+      entidad: "empleado",
+      entidadId: uid,
+      detalle: `Alta de ${usuario.nombre} ${usuario.apellido} (${usuario.email}), rol ${usuario.rol}`,
+    });
     return NextResponse.json({ uid, tempPassword, empleado: usuario }, { status: 201 });
   } catch (err) {
-    if (err instanceof EmailAlreadyExistsError) {
+    if (err instanceof EmailAlreadyExistsError || err instanceof CedulaAlreadyExistsError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
     throw err;

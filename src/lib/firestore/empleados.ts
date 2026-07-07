@@ -21,6 +21,23 @@ export class EmailAlreadyExistsError extends Error {
   }
 }
 
+export class CedulaAlreadyExistsError extends Error {
+  constructor() {
+    super("La cédula ya está registrada");
+    this.name = "CedulaAlreadyExistsError";
+  }
+}
+
+/** True if any usuarios doc already has this cédula (uniqueness — AB-210). */
+export async function cedulaEnUso(cedula: string): Promise<boolean> {
+  const snap = await adminDb
+    .collection("usuarios")
+    .where("cedula", "==", cedula)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
 export async function createEmpleado(
   input: EmpleadoCreateInput,
   createdBy: string
@@ -29,6 +46,8 @@ export async function createEmpleado(
     .getUserByEmail(input.email)
     .catch(() => null);
   if (existing) throw new EmailAlreadyExistsError();
+
+  if (await cedulaEnUso(input.cedula)) throw new CedulaAlreadyExistsError();
 
   const tempPassword = generateTempPassword();
   const rol = input.rol ?? "empleado";

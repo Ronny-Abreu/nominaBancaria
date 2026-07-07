@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole, UnauthorizedError, ForbiddenError } from "@/lib/auth/session";
 import { empleadoCreateSchema } from "@/lib/validation/empleadoSchema";
-import { createEmpleado, listUsuariosByRol, EmailAlreadyExistsError } from "@/lib/firestore/empleados";
+import {
+  createEmpleado,
+  listUsuariosByRol,
+  EmailAlreadyExistsError,
+  CedulaAlreadyExistsError,
+} from "@/lib/firestore/empleados";
+import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
+import { getClientIp } from "@/lib/http/clientIp";
 
 export async function GET() {
   try {
@@ -37,9 +44,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const { uid, tempPassword, usuario } = await createEmpleado(parsed.data, session.uid);
+    await logAudit({
+      accion: "usuario.crear",
+      ...actorFromSession(session),
+      ip: getClientIp(req),
+      entidad: "usuario",
+      entidadId: uid,
+      detalle: `Alta de cuenta ${usuario.email} con rol ${usuario.rol}`,
+    });
     return NextResponse.json({ uid, tempPassword, usuario }, { status: 201 });
   } catch (err) {
-    if (err instanceof EmailAlreadyExistsError) {
+    if (err instanceof EmailAlreadyExistsError || err instanceof CedulaAlreadyExistsError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
     throw err;

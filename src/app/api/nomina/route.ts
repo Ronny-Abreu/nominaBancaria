@@ -3,6 +3,8 @@ import { requireRole, UnauthorizedError, ForbiddenError } from "@/lib/auth/sessi
 import { nominaCreateSchema } from "@/lib/validation/nominaSchema";
 import { getUsuariosByIds } from "@/lib/firestore/empleados";
 import { createNominaRun } from "@/lib/firestore/nominaRuns";
+import { logAudit, actorFromSession } from "@/lib/firestore/auditLogs";
+import { getClientIp } from "@/lib/http/clientIp";
 
 export async function POST(req: NextRequest) {
   let session;
@@ -35,5 +37,13 @@ export async function POST(req: NextRequest) {
   }
 
   const runId = await createNominaRun(parsed.data.periodo, session.uid, empleados);
+  await logAudit({
+    accion: "nomina.crear",
+    ...actorFromSession(session),
+    ip: getClientIp(req),
+    entidad: "nominaRun",
+    entidadId: runId,
+    detalle: `Corrida de nómina ${parsed.data.periodo} con ${empleados.length} empleado(s)`,
+  });
   return NextResponse.json({ runId });
 }
