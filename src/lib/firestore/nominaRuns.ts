@@ -129,6 +129,54 @@ export async function marcarPagoRealizado(
   });
 }
 
+// --- Reportes consolidados (AB-102) ------------------------------------------
+
+export interface ReporteFila {
+  empleadoUid: string;
+  nombre: string;
+  email: string;
+  salarioBruto: number;
+  afp: number;
+  ars: number;
+  isr: number;
+  salarioNeto: number;
+}
+
+/**
+ * Consolida los recibos efectivamente enviados de un período. Recorre todas las
+ * corridas de ese período y deduplica por empleado (si por reproceso hubiera más
+ * de una), quedándose con el último visto.
+ */
+export async function getReporteNomina(periodo: string): Promise<ReporteFila[]> {
+  const runsSnap = await adminDb
+    .collection("nominaRuns")
+    .where("periodo", "==", periodo)
+    .get();
+
+  const porEmpleado = new Map<string, ReporteFila>();
+  for (const runDoc of runsSnap.docs) {
+    const itemsSnap = await runDoc.ref
+      .collection("items")
+      .where("estado", "==", "enviado")
+      .get();
+    for (const itemDoc of itemsSnap.docs) {
+      const item = itemDoc.data() as NominaItem;
+      porEmpleado.set(item.empleadoUid, {
+        empleadoUid: item.empleadoUid,
+        nombre: item.nombre,
+        email: item.email,
+        salarioBruto: item.salarioBruto,
+        afp: item.deducciones.afp,
+        ars: item.deducciones.ars,
+        isr: item.deducciones.isr,
+        salarioNeto: item.salarioNeto,
+      });
+    }
+  }
+
+  return Array.from(porEmpleado.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
 /** Separa los uids en los que aún no tienen pago para el período y los que sí. */
 export async function filtrarEmpleadosNoPagados(
   periodo: string,

@@ -9,6 +9,40 @@ por correo, con feedback en tiempo real vía Firestore.
 Ver [DESCRIPCION_PROYECTO_NOMINA.md](./DESCRIPCION_PROYECTO_NOMINA.md) para el
 alcance funcional completo.
 
+## Cobertura del backlog AB (`md-context/BACKLOG_COMPLETE.md`)
+
+Además del núcleo anterior, el PoC implementa estas historias del backlog:
+
+- **AB-100 — Registro inmutable de auditoría**: colección append-only
+  `auditLogs` (solo lectura admin, escritura únicamente vía Admin SDK). Registra
+  login/logout, altas/ediciones/bajas/eliminaciones de empleados, alta de
+  usuarios, creación/finalización de nómina, pagos duplicados bloqueados,
+  cambios de configuración y solicitudes de reset. Visor en `/auditoria`.
+- **AB-79 / AB-138 — Parámetros fiscales configurables**: tasas AFP/ARS y
+  tramos ISR editables desde `/configuracion` (admin) sin redeploy.
+- **AB-150 — Idempotencia de pagos**: un empleado no puede recibir el mismo
+  pago dos veces en un período (marcadores `pagosRealizados`).
+- **AB-147 / AB-151 — Historial y seguimiento de nóminas**: `/nomina/historial`.
+- **AB-52 — Restablecimiento de contraseña**: "¿Olvidaste tu contraseña?" en el
+  login (Firebase `sendPasswordResetEmail`, mensaje genérico anti-enumeración).
+- **AB-210 — Unicidad de cédula** al crear empleados/usuarios.
+- **AB-102 — Reportes consolidados** de nómina por período en PDF y Excel
+  (`/reportes`).
+
+### Fuera de alcance (versión enterprise, no en este PoC)
+
+Estos ítems del backlog pertenecen a la versión enterprise y **no** se
+implementan aquí; su equivalente factible ya está cubierto por el stack actual:
+
+- **AB-82 / AB-101** — integración con API bancaria real (aquí el "pago" se
+  simula con el envío del recibo por correo).
+- **AB-81** — infraestructura AWS EC2/RDS (se usa Vercel; HTTPS es automático).
+- **AB-98** — migración ETL de nóminas históricas.
+- **AB-100 (parte MongoDB Atlas)** — la auditoría se implementa en Firestore
+  como colección append-only, no en MongoDB.
+- Rol **Supervisor** (se mantienen 3 roles) y cálculo de salario bruto con
+  horas extra / bonos / ausencias (AB-152).
+
 ## Stack
 
 Next.js (App Router) + TypeScript + Tailwind CSS · Firebase (Auth + Firestore)
@@ -32,9 +66,10 @@ Copia `.env.local.example` a `.env.local` y completa:
 
 ### 2. Firestore
 
-Despliega las reglas de seguridad (`firestore.rules`) desde la consola de
-Firebase o con `firebase deploy --only firestore:rules` (requiere
-`firebase-tools` y `firebase init` apuntando a tu proyecto).
+Despliega las reglas de seguridad (`firestore.rules`) y el índice compuesto
+(`firestore.indexes.json`, requerido por el filtro de auditoría) desde la
+consola de Firebase o con `firebase deploy --only firestore:rules,firestore:indexes`
+(requiere `firebase-tools` y `firebase init` apuntando a tu proyecto).
 
 ### 3. Primer usuario admin (bootstrap)
 
@@ -75,8 +110,10 @@ Abre http://localhost:3000 — redirige a `/login`.
 
 ## Notas de diseño
 
-- Los montos de deducciones (AFP, ARS, ISR) en `src/lib/payroll/deductions.ts`
-  son valores aproximados con fines académicos, no una fuente fiscal oficial.
+- Los montos de deducciones (AFP, ARS, ISR) son valores aproximados con fines
+  académicos, no una fuente fiscal oficial. Los valores por defecto viven en
+  `src/lib/payroll/deductions.ts` y se pueden ajustar en caliente desde
+  `/configuracion` (se guardan en `configuracion/parametrosFiscales`).
 - El envío de correos usa concurrencia controlada
   (`PAYROLL_BATCH_CONCURRENCY`, `src/lib/payroll/asyncPool.ts`) para evitar
   rate-limits del proveedor SMTP y no bloquear la UI; el progreso se observa

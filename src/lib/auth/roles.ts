@@ -25,6 +25,7 @@ const PATH_ROLES: Array<{ prefix: string; roles: Rol[] }> = [
   { prefix: "/dashboard", roles: ["admin", "rrhh"] },
   { prefix: "/empleados", roles: ["admin", "rrhh"] },
   { prefix: "/nomina", roles: ["admin", "rrhh"] },
+  { prefix: "/reportes", roles: ["admin", "rrhh"] },
   { prefix: "/usuarios", roles: ["admin"] },
   { prefix: "/configuracion", roles: ["admin"] },
   { prefix: "/auditoria", roles: ["admin"] },
