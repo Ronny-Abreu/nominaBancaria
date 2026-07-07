@@ -1,25 +1,36 @@
 // VALORES APROXIMADOS CON FINES ACADÉMICOS — NO CONSTITUYEN ASESORÍA FISCAL
 // NI REFLEJAN NECESARIAMENTE LA NORMATIVA VIGENTE ACTUALIZADA (AFP/ARS/ISR RD).
+//
+// Las tasas se leen de `ParametrosFiscales` (configurables desde el panel de
+// administración, AB-79/AB-138). Estos valores por defecto se usan como semilla
+// inicial y como fallback si no hay configuración almacenada.
 import type { Deducciones } from "@/types/nomina";
+import type { ParametrosFiscales, IsrBracket } from "@/types/config";
 
-const AFP_RATE = 0.0287;
-const ARS_RATE = 0.0304;
+export const DEFAULT_PARAMETROS_FISCALES: ParametrosFiscales = {
+  afpRate: 0.0287,
+  arsRate: 0.0304,
+  // Tramos mensuales ilustrativos, con forma similar al ISR progresivo dominicano.
+  isrBrackets: [
+    { upTo: 34685, rate: 0, base: 0 },
+    { upTo: 52027, rate: 0.15, base: 0 },
+    { upTo: 72317, rate: 0.2, base: 2601.3 }, // 15% de (52027-34685)
+    { upTo: null, rate: 0.25, base: 6660.1 }, // sin tope; acumulado tramo anterior
+  ],
+  updatedAt: 0,
+  updatedBy: "default",
+};
 
-// Tramos mensuales ilustrativos, con forma similar al ISR progresivo dominicano.
-const ISR_BRACKETS = [
-  { upTo: 34685, rate: 0, base: 0 },
-  { upTo: 52027, rate: 0.15, base: 0 },
-  { upTo: 72317, rate: 0.2, base: 2601.3 }, // 15% de (52027-34685)
-  { upTo: Infinity, rate: 0.25, base: 6660.1 }, // acumulado tramo anterior
-];
+const cap = (b: IsrBracket): number => b.upTo ?? Infinity;
 
-function calcularIsr(baseImponible: number): number {
-  if (baseImponible <= ISR_BRACKETS[0].upTo) return 0;
+function calcularIsr(baseImponible: number, brackets: IsrBracket[]): number {
+  if (brackets.length === 0) return 0;
+  if (baseImponible <= cap(brackets[0])) return 0;
 
-  for (let i = 1; i < ISR_BRACKETS.length; i++) {
-    const bracket = ISR_BRACKETS[i];
-    const prevUpTo = ISR_BRACKETS[i - 1].upTo;
-    if (baseImponible <= bracket.upTo) {
+  for (let i = 1; i < brackets.length; i++) {
+    const bracket = brackets[i];
+    const prevUpTo = cap(brackets[i - 1]);
+    if (baseImponible <= cap(bracket)) {
       return bracket.base + (baseImponible - prevUpTo) * bracket.rate;
     }
   }
@@ -31,11 +42,14 @@ export interface DeduccionesResult extends Deducciones {
   salarioNeto: number;
 }
 
-export function calcularDeducciones(salarioBruto: number): DeduccionesResult {
-  const afp = round2(salarioBruto * AFP_RATE);
-  const ars = round2(salarioBruto * ARS_RATE);
+export function calcularDeducciones(
+  salarioBruto: number,
+  params: ParametrosFiscales = DEFAULT_PARAMETROS_FISCALES
+): DeduccionesResult {
+  const afp = round2(salarioBruto * params.afpRate);
+  const ars = round2(salarioBruto * params.arsRate);
   const baseImponible = salarioBruto - afp - ars;
-  const isr = round2(calcularIsr(baseImponible));
+  const isr = round2(calcularIsr(baseImponible, params.isrBrackets));
 
   const totalDeducciones = round2(afp + ars + isr);
   const salarioNeto = Math.max(0, round2(salarioBruto - totalDeducciones));

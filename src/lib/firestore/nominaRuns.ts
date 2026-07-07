@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { calcularDeducciones } from "@/lib/payroll/deductions";
+import { getParametrosFiscales } from "@/lib/firestore/config";
 import type { NominaRun, NominaItem, EstadoNominaItem } from "@/types/nomina";
 import type { Usuario } from "@/types/user";
 
@@ -35,11 +36,14 @@ export async function createNominaRun(
     finishedAt: null,
   };
 
+  // Snapshot de los parámetros fiscales vigentes al momento de la corrida.
+  const parametros = await getParametrosFiscales();
+
   const batch = adminDb.batch();
   batch.set(runRef(runId), run);
 
   for (const empleado of empleados) {
-    const { afp, ars, isr, salarioNeto } = calcularDeducciones(empleado.salarioBruto);
+    const { afp, ars, isr, salarioNeto } = calcularDeducciones(empleado.salarioBruto, parametros);
     const item: NominaItem = {
       empleadoUid: empleado.uid,
       nombre: `${empleado.nombre} ${empleado.apellido}`,
