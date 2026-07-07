@@ -72,5 +72,11 @@ service cloud.firestore {
       allow read: if isRrhhOrAdmin();
       allow write: if false;
     }
+
+    // Contadores internos (p.ej. secuencia de código de empleado): nunca
+    // accedidos desde el cliente, solo por Admin SDK dentro de transacciones.
+    match /counters/{id} {
+      allow read, write: if false;
+    }
   }
 }
