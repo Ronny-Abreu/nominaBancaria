@@ -40,29 +40,53 @@ export default function AuditoriaPage() {
   const [accion, setAccion] = useState("");
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // No llamamos setState de forma síncrona aquí (regla set-state-in-effect):
-  // el primer setState ocurre tras el await del fetch.
-  const load = useCallback(
-    async (accionFilter: string, cursorTs: number | null, append: boolean) => {
+  // Fetcher puro (no toca estado): retorna los datos o un error. El setState
+  // ocurre en los callbacks (efecto / handler), no de forma síncrona en el
+  // cuerpo del efecto — así se respeta la regla set-state-in-effect.
+  const fetchLogs = useCallback(
+    async (
+      accionFilter: string,
+      cursorTs: number | null
+    ): Promise<{ logs?: AuditLog[]; nextCursor?: number | null; error?: string }> => {
       const qs = new URLSearchParams();
       if (accionFilter) qs.set("accion", accionFilter);
       if (cursorTs) qs.set("cursor", String(cursorTs));
-      try {
-        const res = await fetch(`/api/auditoria?${qs.toString()}`);
-        const data = await res.json();
-        setLogs((prev) => (append ? [...prev, ...(data.logs ?? [])] : data.logs ?? []));
-        setNextCursor(data.nextCursor ?? null);
-      } finally {
-        setLoading(false);
+
+      const res = await fetch(`/api/auditoria?${qs.toString()}`).catch(() => null);
+      if (!res || !res.ok) {
+        const data = res ? await res.json().catch(() => null) : null;
+        return {
+          error:
+            typeof data?.error === "string" ? data.error : "No se pudo cargar la auditoría.",
+        };
       }
+      const data = await res.json().catch(() => null);
+      return { logs: data?.logs ?? [], nextCursor: data?.nextCursor ?? null };
     },
     []
   );
 
   useEffect(() => {
-    load(accion, null, false);
-  }, [accion, load]);
+    let cancelled = false;
+    fetchLogs(accion, null).then((r) => {
+      if (cancelled) return;
+      if (r.error) {
+        setError(r.error);
+        setLogs([]);
+        setNextCursor(null);
+      } else {
+        setError(null);
+        setLogs(r.logs ?? []);
+        setNextCursor(r.nextCursor ?? null);
+      }
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accion, fetchLogs]);
 
   return (
     <div className="max-w-5xl">
@@ -86,6 +110,10 @@ export default function AuditoriaPage() {
           <div className="flex items-center gap-2 py-8 text-ink-muted">
             <Spinner /> Cargando registros…
           </div>
+        ) : error ? (
+          <p role="alert" className="py-8 text-rust">
+            {error}
+          </p>
         ) : logs.length === 0 ? (
           <p className="py-8 text-ink-muted">No hay registros para este filtro.</p>
         ) : (
@@ -124,7 +152,16 @@ export default function AuditoriaPage() {
                   loading={loading}
                   onClick={() => {
                     setLoading(true);
-                    load(accion, nextCursor, true);
+                    fetchLogs(accion, nextCursor).then((r) => {
+                      if (r.error) {
+                        setError(r.error);
+                      } else {
+                        setError(null);
+                        setLogs((prev) => [...prev, ...(r.logs ?? [])]);
+                        setNextCursor(r.nextCursor ?? null);
+                      }
+                      setLoading(false);
+                    });
                   }}
                 >
                   Cargar más

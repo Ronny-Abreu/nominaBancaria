@@ -16,16 +16,6 @@ export function actorFromSession(session: SessionUser) {
 
 const COLLECTION = "auditLogs";
 
-/**
- * Writes one append-only audit entry. Deliberately resilient: it swallows all
- * errors so a logging failure can NEVER break the critical operation being
- * audited (e.g. login). Callers can `await logAudit(...)` without a try/catch.
- *
- * We `await` (rather than fire-and-forget) because a Vercel serverless function
- * may be frozen right after the response is sent, dropping unfinished work — so
- * a truly async background write would often be lost. The write is a single
- * lightweight document, so the added latency is negligible.
- */
 export async function logAudit(entry: AuditLogInput): Promise<void> {
   try {
     const id = randomUUID();
@@ -73,18 +63,27 @@ export interface ListAuditParams {
   accion?: string;
 }
 
+// Cap de documentos a traer cuando se filtra por acción y se ordena en memoria.
+const ACCION_SCAN_CAP = 1000;
+
 export async function listAuditLogs({
   limit = 50,
   cursorTimestamp,
   accion,
 }: ListAuditParams): Promise<AuditLog[]> {
-  let query = adminDb
-    .collection(COLLECTION)
-    .orderBy("timestamp", "desc") as FirebaseFirestore.Query;
+  const col = adminDb.collection(COLLECTION);
 
-  if (accion) query = query.where("accion", "==", accion);
+  if (accion) {
+    const snap = await col.where("accion", "==", accion).limit(ACCION_SCAN_CAP).get();
+    let rows = snap.docs
+      .map((d) => d.data() as AuditLog)
+      .sort((a, b) => b.timestamp - a.timestamp);
+    if (cursorTimestamp) rows = rows.filter((r) => r.timestamp < cursorTimestamp);
+    return rows.slice(0, limit);
+  }
+
+  let query = col.orderBy("timestamp", "desc") as FirebaseFirestore.Query;
   if (cursorTimestamp) query = query.startAfter(cursorTimestamp);
-
   const snap = await query.limit(limit).get();
   return snap.docs.map((d) => d.data() as AuditLog);
 }

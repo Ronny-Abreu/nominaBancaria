@@ -66,10 +66,11 @@ Copia `.env.local.example` a `.env.local` y completa:
 
 ### 2. Firestore
 
-Despliega las reglas de seguridad (`firestore.rules`) y el índice compuesto
-(`firestore.indexes.json`, requerido por el filtro de auditoría) desde la
-consola de Firebase o con `firebase deploy --only firestore:rules,firestore:indexes`
-(requiere `firebase-tools` y `firebase init` apuntando a tu proyecto).
+Despliega las reglas de seguridad (`firestore.rules`) desde la consola de
+Firebase o con `firebase deploy --only firestore:rules` (requiere
+`firebase-tools` y `firebase init` apuntando a tu proyecto). No se requieren
+índices compuestos: las consultas del visor de auditoría usan igualdad simple y
+ordenan en memoria.
 
 ### 3. Primer usuario admin (bootstrap)
 

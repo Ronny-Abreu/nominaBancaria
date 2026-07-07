@@ -20,8 +20,15 @@ export async function GET(req: NextRequest) {
   const cursor = params.get("cursor");
   const cursorTimestamp = cursor ? Number(cursor) : undefined;
 
-  const logs = await listAuditLogs({ limit: 50, accion, cursorTimestamp });
-  const nextCursor = logs.length === 50 ? logs[logs.length - 1].timestamp : null;
-
-  return NextResponse.json({ logs, nextCursor });
+  try {
+    const logs = await listAuditLogs({ limit: 50, accion, cursorTimestamp });
+    const nextCursor = logs.length === 50 ? logs[logs.length - 1].timestamp : null;
+    return NextResponse.json({ logs, nextCursor });
+  } catch (err) {
+    console.error("Error listando auditoría:", err);
+    return NextResponse.json(
+      { error: "No se pudo cargar la auditoría" },
+      { status: 500 }
+    );
+  }
 }
