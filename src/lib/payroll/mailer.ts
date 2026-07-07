@@ -1,5 +1,6 @@
 import "server-only";
 import nodemailer from "nodemailer";
+import { EmailUndeliverableError } from "@/lib/payroll/emailVerify";
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -24,7 +25,7 @@ export async function sendPayslipEmail(params: {
   periodo: string;
   pdfBuffer: Buffer;
 }): Promise<void> {
-  await getTransporter().sendMail({
+  const info = await getTransporter().sendMail({
     from: process.env.MAIL_FROM,
     to: params.to,
     subject: `Recibo de nómina — ${params.periodo}`,
@@ -36,4 +37,18 @@ export async function sendPayslipEmail(params: {
       },
     ],
   });
+
+  // Rechazo a nivel de la transacción SMTP (el servidor rechazó al
+  // destinatario en el acto). Gmail suele aceptar y rebotar después, pero si
+  // rechaza aquí, no debemos dar el pago por enviado.
+  const norm = (arr: (string | { address?: string })[]): string[] =>
+    arr.map((a) => (typeof a === "string" ? a : a.address ?? "").toLowerCase());
+  const accepted = norm(info.accepted ?? []);
+  const rejected = norm(info.rejected ?? []);
+  const to = params.to.toLowerCase();
+  if (rejected.includes(to) || !accepted.includes(to)) {
+    throw new EmailUndeliverableError(
+      `El servidor de correo rechazó la dirección ${params.to}`
+    );
+  }
 }

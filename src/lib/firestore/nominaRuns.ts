@@ -129,6 +129,14 @@ export async function marcarPagoRealizado(
   });
 }
 
+/**
+ * Revierte el marcador de idempotencia de un empleado (p. ej. cuando su correo
+ * rebotó y el pago deja de considerarse realizado). Así podrá reprocesarse.
+ */
+export async function eliminarMarcadorPago(periodo: string, uid: string): Promise<void> {
+  await pagoMarkerRef(periodo, uid).delete();
+}
+
 // --- Reportes consolidados (AB-102) ------------------------------------------
 
 export interface ReporteFila {

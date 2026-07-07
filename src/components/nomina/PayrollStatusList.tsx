@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import type { NominaItem, NominaRun } from "@/types/nomina";
 
@@ -12,8 +14,39 @@ const currency = new Intl.NumberFormat("es-DO", {
 });
 
 export function PayrollStatusList({ runId }: { runId: string }) {
+  const router = useRouter();
   const [run, setRun] = useState<NominaRun | null>(null);
   const [items, setItems] = useState<NominaItem[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [bounceMsg, setBounceMsg] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
+
+  async function verificarRebotes() {
+    setChecking(true);
+    setBounceMsg(null);
+    try {
+      const res = await fetch(`/api/nomina/${runId}/verificar-rebotes`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setBounceMsg({ tone: "warn", text: data?.error ?? "No se pudo verificar los rebotes." });
+        return;
+      }
+      if (data?.configured === false) {
+        setBounceMsg({
+          tone: "warn",
+          text: "La verificación de rebotes por IMAP no está configurada en el servidor.",
+        });
+        return;
+      }
+      const n = Array.isArray(data?.revertidos) ? data.revertidos.length : 0;
+      setBounceMsg(
+        n > 0
+          ? { tone: "warn", text: `${n} pago(s) revertido(s) por correo rebotado (dirección inexistente).` }
+          : { tone: "ok", text: "No se detectaron rebotes: todas las direcciones recibieron el correo." }
+      );
+    } finally {
+      setChecking(false);
+    }
+  }
 
   useEffect(() => {
     return onSnapshot(doc(db, "nominaRuns", runId), (snap) => {
@@ -48,7 +81,32 @@ export function PayrollStatusList({ runId }: { runId: string }) {
         </div>
       </div>
 
-      <div className="ledger-perforation" aria-hidden="true" />
+      {(run.status === "completado" || run.status === "completado_con_errores") &&
+        run.totalExitosos > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button variant="secondary" loading={checking} onClick={verificarRebotes}>
+              Verificar rebotes de correo
+            </Button>
+            <Button variant="secondary" onClick={() => router.push("/reportes")}>
+              Generar reporte
+            </Button>
+            <span className="text-xs text-ink-muted">
+              Gmail rebota los correos inexistentes unos minutos después; ejecuta esta
+              verificación pasado un momento para revertir esos pagos.
+            </span>
+          </div>
+        )}
+
+      {bounceMsg && (
+        <p
+          role="status"
+          className={`mt-3 text-sm ${bounceMsg.tone === "ok" ? "text-ledger" : "text-rust"}`}
+        >
+          {bounceMsg.text}
+        </p>
+      )}
+
+      <div className="ledger-perforation mt-4" aria-hidden="true" />
 
       <ul className="divide-y divide-rule border-x border-b border-rule bg-paper">
         {items.map((item) => (

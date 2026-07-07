@@ -24,6 +24,7 @@ export default function NominaPage() {
   const [error, setError] = useState<string | null>(null);
   const [omitidos, setOmitidos] = useState<{ uid: string; nombre: string }[]>([]);
   const [runIdListo, setRunIdListo] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const q = query(
@@ -37,6 +38,16 @@ export default function NominaPage() {
     });
   }, []);
 
+  const term = search.trim().toLowerCase();
+  const empleadosFiltrados = term
+    ? empleados.filter(
+        (e) =>
+          `${e.nombre} ${e.apellido}`.toLowerCase().includes(term) ||
+          e.email.toLowerCase().includes(term) ||
+          (e.codigoEmpleado ?? "").toLowerCase().includes(term)
+      )
+    : empleados;
+
   function toggle(uid: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -47,7 +58,7 @@ export default function NominaPage() {
   }
 
   function toggleAll(checked: boolean) {
-    setSelected(checked ? new Set(empleados.map((e) => e.uid)) : new Set());
+    setSelected(checked ? new Set(empleadosFiltrados.map((e) => e.uid)) : new Set());
   }
 
   async function handleProcesar() {
@@ -112,15 +123,27 @@ export default function NominaPage() {
           />
         </div>
 
+        {!loading && empleados.length > 0 && (
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, correo o código…"
+            className="border border-rule bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+          />
+        )}
+
         {loading ? (
           <div className="flex items-center gap-2 py-8 text-ink-muted">
             <Spinner /> Cargando empleados…
           </div>
         ) : empleados.length === 0 ? (
           <p className="py-8 text-ink-muted">No hay empleados activos para procesar.</p>
+        ) : empleadosFiltrados.length === 0 ? (
+          <p className="py-8 text-ink-muted">Ningún empleado coincide con la búsqueda.</p>
         ) : (
           <EmpleadoSelector
-            empleados={empleados}
+            empleados={empleadosFiltrados}
             selected={selected}
             onToggle={toggle}
             onToggleAll={toggleAll}

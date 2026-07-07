@@ -42,6 +42,11 @@ export function EmpleadoSelector({
                 <span className="text-ink">
                   {empleado.nombre} {empleado.apellido}
                 </span>
+                {empleado.codigoEmpleado && (
+                  <span className="font-mono text-xs text-ink-muted">
+                    {empleado.codigoEmpleado}
+                  </span>
+                )}
               </span>
               <span className="text-ink-muted">{empleado.email}</span>
             </label>

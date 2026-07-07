@@ -3,6 +3,7 @@ import { requireRole, UnauthorizedError, ForbiddenError } from "@/lib/auth/sessi
 import { asyncPool } from "@/lib/payroll/asyncPool";
 import { generatePayslipPdf } from "@/lib/payroll/pdf";
 import { sendPayslipEmail } from "@/lib/payroll/mailer";
+import { assertDeliverable } from "@/lib/payroll/emailVerify";
 import {
   getNominaRun,
   getNominaItems,
@@ -80,6 +81,10 @@ async function processOneEmployeePayroll(
   await markItemEstado(runId, item.empleadoUid, "procesando");
 
   try {
+    // Verificación de entregabilidad previa: si el dominio no existe / no puede
+    // recibir correos, lanzamos y el pago NO se marca como enviado.
+    await assertDeliverable(item.email);
+
     const pdfBuffer = await generatePayslipPdf({
       empleadoNombre: item.nombre,
       periodo,
