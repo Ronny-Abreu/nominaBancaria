@@ -32,6 +32,8 @@ export async function GET() {
         runId: run.runId,
         periodo: run.periodo,
         estado: item.estado,
+        salarioBruto: item.salarioBruto,
+        deducciones: item.deducciones,
         salarioNeto: item.salarioNeto,
         emailEnviadoAt: item.emailEnviadoAt,
       };
